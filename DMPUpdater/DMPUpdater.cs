@@ -1,33 +1,35 @@
 using System;
-using System.Net;
-using System.Text;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace DMPUpdater
 {
     class DMPUpdater
     {
-        private const string DEFAULT_UPDATER_ADDRESS = "http://chrisand.no-ip.info/dmp/updater/";
-        private static string mode;
-        private static string updateType;
-        private static string throwError;
-        private static string updateAddress = DEFAULT_UPDATER_ADDRESS;
-        private static string applicationDirectory;
-        private static string[] versionIndex;
-        private static string[] fileIndex;
-        private static bool batchMode;
+        private const string DefaultUpdaterAddress = "http://chrisand.no-ip.info/dmp/updater/";
+        private static string _mode;
+        private static string _updateType;
+        private static string _throwError;
+        private const string UpdateAddress = DefaultUpdaterAddress;
+        private static string _applicationDirectory;
+        private static string[] _versionIndex;
+        private static string[] _fileIndex;
+        private static bool _batchMode;
         #region Main Logic
         public static int Main(string[] args)
         {
-            if (args.Length > 0 ? (args[0] == "-b" || args[0] == "--batch") : false)
+            if (args.Length > 0 && (args[0] == "-b" || args[0] == "--batch"))
             {
                 Console.WriteLine("Running in batch mode");
-                batchMode = true;
+                _batchMode = true;
             }
-            applicationDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            _applicationDirectory = AppDomain.CurrentDomain.BaseDirectory;
             if (!SetMode())
             {
+                Console.Error.WriteLine("Badly formatted version.");
                 Console.WriteLine("Badly formatted version.");
                 Console.WriteLine("File name should be DMPUpdater-(version).exe");
                 AskToExitIfInteractive();
@@ -35,30 +37,30 @@ namespace DMPUpdater
             }
             else
             {
-                Console.WriteLine("Using the " + mode + " version");
+                Console.WriteLine("Using the " + _mode + " version");
             }
-            updateType = "";
-            if (File.Exists(Path.Combine(applicationDirectory, "DMPServer.exe")))
+            _updateType = "";
+            if (File.Exists(Path.Combine(_applicationDirectory, "DMPServer.exe")))
             {
-                updateType = "server";
+                _updateType = "server";
             }
-            if (File.Exists(Path.Combine(applicationDirectory, "KSP.exe")) || Directory.Exists(Path.Combine(applicationDirectory, "KSP.app")) || File.Exists(Path.Combine(applicationDirectory, "KSP.x86")))
+            if (File.Exists(Path.Combine(_applicationDirectory, "KSP.exe")) || Directory.Exists(Path.Combine(_applicationDirectory, "KSP.app")) || File.Exists(Path.Combine(_applicationDirectory, "KSP.x86")))
             {
-                updateType = "client";
+                _updateType = "client";
             }
-            if (updateType == "")
+            if (_updateType == "")
             {
-                Console.WriteLine("Cannot find client or server in: " + applicationDirectory);
+                Console.WriteLine("Cannot find client or server in: " + _applicationDirectory);
                 Console.WriteLine("Place DMPUpdater next to KSP.exe or DMPServer.exe");
                 AskToExitIfInteractive();
                 return 2;
             }
-            Console.WriteLine("Updating " + updateType);
+            Console.WriteLine("Updating " + _updateType);
             Console.Write("Downloading version index...");
             if (!GetVersionIndex())
             {
                 Console.WriteLine(" failed!");
-                Console.WriteLine(throwError);
+                Console.WriteLine(_throwError);
                 AskToExitIfInteractive();
                 return 3;
             }
@@ -71,7 +73,7 @@ namespace DMPUpdater
             {
                 Console.WriteLine(" failed!");
                 Console.WriteLine("Version does not exist, Current versions are:");
-                foreach (string version in versionIndex)
+                foreach (var version in _versionIndex)
                 {
                     Console.WriteLine(version);
                 }
@@ -82,11 +84,11 @@ namespace DMPUpdater
             {
                 Console.WriteLine(" ok!");
             }
-            Console.Write("Downloading " + mode + " index...");
+            Console.Write("Downloading " + _mode + " index...");
             if (!GetFileIndex())
             {
                 Console.WriteLine(" failed!");
-                Console.WriteLine(throwError);
+                Console.WriteLine(_throwError);
                 AskToExitIfInteractive();
                 return 5;
             }
@@ -94,21 +96,21 @@ namespace DMPUpdater
             {
                 Console.WriteLine(" ok!");
             }
-            Console.WriteLine("Parsing " + mode + " index...");
+            Console.WriteLine("Parsing " + _mode + " index...");
             if (!parseFileIndex())
             {
-                Console.WriteLine(throwError);
+                Console.WriteLine(_throwError);
                 AskToExitIfInteractive();
                 return 6;
             }
-            Console.WriteLine("Your DMP " + updateType + " is up to date!");
+            Console.WriteLine("Your DMP " + _updateType + " is up to date!");
             AskToExitIfInteractive();
             return 0;
         }
         //Asks to exit if running interactively
         private static void AskToExitIfInteractive()
         {
-            if (!batchMode)
+            if (!_batchMode)
             {
                 Console.WriteLine("\nPress any key to exit");
                 Console.ReadKey();
@@ -123,7 +125,7 @@ namespace DMPUpdater
             {
                 if (exeName == "DMPUpdater.exe")
                 {
-                    mode = "release";
+                    _mode = "release";
                 }
                 else
                 {
@@ -132,53 +134,47 @@ namespace DMPUpdater
             }
             else
             {
-                mode = exeName.Remove(0, exeName.LastIndexOf("-") + 1).Replace(".exe", "").ToLowerInvariant();
+                _mode = exeName.Remove(0, exeName.LastIndexOf("-") + 1).Replace(".exe", "").ToLowerInvariant();
             }
             return true;
         }
 
         private static bool CheckVersion()
         {
-            foreach (string version in versionIndex)
-            {
-                if (version == mode)
-                {
-                    return true;
-                }
-            }
-            return false;
+            return _versionIndex.Any(version => version == _mode);
         }
+
         #endregion
         #region Download indexes
         private static bool GetVersionIndex()
-        { 
+        {
             try
             {
                 using (WebClient wc = new WebClient())
                 {
-                    versionIndex = Encoding.UTF8.GetString(wc.DownloadData(updateAddress + "/index.txt")).Split(new string[] { "\n" }, StringSplitOptions.None);
+                    _versionIndex = Encoding.UTF8.GetString(wc.DownloadData(UpdateAddress + "/index.txt")).Split(new string[] { "\n" }, StringSplitOptions.None);
                 }
             }
             catch (Exception e)
             {
-                throwError = e.Message;
+                _throwError = e.Message;
                 return false;
             }
             return true;
         }
 
         private static bool GetFileIndex()
-        { 
+        {
             try
             {
                 using (WebClient wc = new WebClient())
                 {
-                    fileIndex = Encoding.UTF8.GetString(wc.DownloadData(updateAddress + "/versions/" + mode + "/" + updateType + ".txt")).Split(new string[] { "\n" }, StringSplitOptions.None);
+                    _fileIndex = Encoding.UTF8.GetString(wc.DownloadData(UpdateAddress + "/versions/" + _mode + "/" + _updateType + ".txt")).Split(new string[] { "\n" }, StringSplitOptions.None);
                 }
             }
             catch (Exception e)
             {
-                throwError = e.Message;
+                _throwError = e.Message;
                 return false;
             }
             return true;
@@ -187,7 +183,7 @@ namespace DMPUpdater
         #region File handling logic
         private static bool parseFileIndex()
         {
-            foreach (string fileentry in fileIndex)
+            foreach (string fileentry in _fileIndex)
             {
                 if (fileentry.Contains("="))
                 {
@@ -207,7 +203,7 @@ namespace DMPUpdater
                         }
                         else
                         {
-                            Console.WriteLine(" done!"); 
+                            Console.WriteLine(" done!");
                         }
 
                     }
@@ -219,20 +215,20 @@ namespace DMPUpdater
         private static void CheckPathExists(string directory)
         {
             //Recursively create any parent directories.
-            if (!Directory.Exists(Path.Combine(applicationDirectory, directory)))
+            if (!Directory.Exists(Path.Combine(_applicationDirectory, directory)))
             {
                 CheckPathExists(Directory.GetParent(directory).ToString());
-                Directory.CreateDirectory(Path.Combine(applicationDirectory, directory));
+                Directory.CreateDirectory(Path.Combine(_applicationDirectory, directory));
             }
         }
 
         private static bool FileNeedsUpdating(string file, string shaSum)
         {
-            if (!File.Exists(Path.Combine(applicationDirectory, file)))
+            if (!File.Exists(Path.Combine(_applicationDirectory, file)))
             {
                 return true;
             }
-            using (FileStream fs = new FileStream(Path.Combine(applicationDirectory, file), FileMode.Open, FileAccess.Read))
+            using (FileStream fs = new FileStream(Path.Combine(_applicationDirectory, file), FileMode.Open, FileAccess.Read))
             {
                 using (SHA256Managed sha = new SHA256Managed())
                 {
@@ -249,22 +245,22 @@ namespace DMPUpdater
         private static bool UpdateFile(string file, string shaSum)
         {
 
-            if (File.Exists(Path.Combine(applicationDirectory, file)))
+            if (File.Exists(Path.Combine(_applicationDirectory, file)))
             {
-                File.Delete(Path.Combine(applicationDirectory, file));
+                File.Delete(Path.Combine(_applicationDirectory, file));
             }
-            using (FileStream fs = new FileStream(Path.Combine(applicationDirectory, file), FileMode.Create, FileAccess.Write))
+            using (FileStream fs = new FileStream(Path.Combine(_applicationDirectory, file), FileMode.Create, FileAccess.Write))
             {
                 using (WebClient wc = new WebClient())
                 {
                     try
                     {
-                        byte[] fileBytes = wc.DownloadData(new Uri(updateAddress + "versions/" + mode + "/objects/" + shaSum));
+                        byte[] fileBytes = wc.DownloadData(new Uri(UpdateAddress + "versions/" + _mode + "/objects/" + shaSum));
                         fs.Write(fileBytes, 0, fileBytes.Length);
                     }
                     catch (Exception e)
                     {
-                        throwError = e.Message;
+                        _throwError = e.Message;
                         return false;
                     }
                 }
