@@ -30,15 +30,11 @@ namespace DMPUpdater
             if (!SetMode())
             {
                 Console.Error.WriteLine("Badly formatted version.");
-                Console.WriteLine("Badly formatted version.");
-                Console.WriteLine("File name should be DMPUpdater-(version).exe");
+                Console.Error.WriteLine("File name should be DMPUpdater-(version).exe");
                 AskToExitIfInteractive();
                 return 1;
             }
-            else
-            {
-                Console.WriteLine("Using the " + _mode + " version");
-            }
+            Console.WriteLine("Using the " + _mode + " version");
             _updateType = "";
             if (File.Exists(Path.Combine(_applicationDirectory, "DMPServer.exe")))
             {
@@ -50,8 +46,8 @@ namespace DMPUpdater
             }
             if (_updateType == "")
             {
-                Console.WriteLine("Cannot find client or server in: " + _applicationDirectory);
-                Console.WriteLine("Place DMPUpdater next to KSP.exe or DMPServer.exe");
+                Console.Error.WriteLine("Cannot find client or server in: " + _applicationDirectory);
+                Console.Error.WriteLine("Place DMPUpdater next to KSP.exe or DMPServer.exe");
                 AskToExitIfInteractive();
                 return 2;
             }
@@ -59,20 +55,17 @@ namespace DMPUpdater
             Console.Write("Downloading version index...");
             if (!GetVersionIndex())
             {
-                Console.WriteLine(" failed!");
-                Console.WriteLine(_throwError);
+                Console.Error.WriteLine(" failed!");
+                Console.Error.WriteLine(_throwError);
                 AskToExitIfInteractive();
                 return 3;
             }
-            else
-            {
-                Console.WriteLine(" done!");
-            }
+            Console.WriteLine(" done!");
             Console.Write("Checking version...");
             if (!CheckVersion())
             {
-                Console.WriteLine(" failed!");
-                Console.WriteLine("Version does not exist, Current versions are:");
+                Console.Error.WriteLine(" failed!");
+                Console.Error.WriteLine("Version does not exist, Current versions are:");
                 foreach (var version in _versionIndex)
                 {
                     Console.WriteLine(version);
@@ -80,26 +73,21 @@ namespace DMPUpdater
                 AskToExitIfInteractive();
                 return 4;
             }
-            else
-            {
-                Console.WriteLine(" ok!");
-            }
+            Console.WriteLine(" ok!");
             Console.Write("Downloading " + _mode + " index...");
             if (!GetFileIndex())
             {
-                Console.WriteLine(" failed!");
-                Console.WriteLine(_throwError);
+                Console.Error.WriteLine(" failed!");
+                Console.Error.WriteLine(_throwError);
                 AskToExitIfInteractive();
                 return 5;
             }
-            else
-            {
-                Console.WriteLine(" ok!");
-            }
+            Console.WriteLine(" ok!");
             Console.WriteLine("Parsing " + _mode + " index...");
-            if (!parseFileIndex())
+            if (!ParseFileIndex())
             {
-                Console.WriteLine(_throwError);
+                Console.Error.WriteLine(" failed!");
+                Console.Error.WriteLine(_throwError);
                 AskToExitIfInteractive();
                 return 6;
             }
@@ -120,7 +108,7 @@ namespace DMPUpdater
         #region Setup logic
         private static bool SetMode()
         {
-            string exeName = AppDomain.CurrentDomain.FriendlyName;
+            var exeName = AppDomain.CurrentDomain.FriendlyName;
             if (!exeName.Contains("-") || !exeName.Contains(".exe"))
             {
                 if (exeName == "DMPUpdater.exe")
@@ -134,7 +122,7 @@ namespace DMPUpdater
             }
             else
             {
-                _mode = exeName.Remove(0, exeName.LastIndexOf("-") + 1).Replace(".exe", "").ToLowerInvariant();
+                _mode = exeName.Remove(0, exeName.LastIndexOf("-", StringComparison.Ordinal) + 1).Replace(".exe", "").ToLowerInvariant();
             }
             return true;
         }
@@ -150,9 +138,9 @@ namespace DMPUpdater
         {
             try
             {
-                using (WebClient wc = new WebClient())
+                using (var wc = new WebClient())
                 {
-                    _versionIndex = Encoding.UTF8.GetString(wc.DownloadData(UpdateAddress + "/index.txt")).Split(new string[] { "\n" }, StringSplitOptions.None);
+                    _versionIndex = Encoding.UTF8.GetString(wc.DownloadData(UpdateAddress + "/index.txt")).Split(new[] { "\n" }, StringSplitOptions.None);
                 }
             }
             catch (Exception e)
@@ -167,9 +155,9 @@ namespace DMPUpdater
         {
             try
             {
-                using (WebClient wc = new WebClient())
+                using (var wc = new WebClient())
                 {
-                    _fileIndex = Encoding.UTF8.GetString(wc.DownloadData(UpdateAddress + "/versions/" + _mode + "/" + _updateType + ".txt")).Split(new string[] { "\n" }, StringSplitOptions.None);
+                    _fileIndex = Encoding.UTF8.GetString(wc.DownloadData(UpdateAddress + "/versions/" + _mode + "/" + _updateType + ".txt")).Split(new[] { "\n" }, StringSplitOptions.None);
                 }
             }
             catch (Exception e)
@@ -181,33 +169,25 @@ namespace DMPUpdater
         }
         #endregion
         #region File handling logic
-        private static bool parseFileIndex()
+        private static bool ParseFileIndex()
         {
-            foreach (string fileentry in _fileIndex)
+            foreach (var fileentry in _fileIndex)
             {
-                if (fileentry.Contains("="))
+                if (!fileentry.Contains("=")) continue;
+                var file = fileentry.Remove(fileentry.LastIndexOf("=", StringComparison.Ordinal));
+                var shaSum = fileentry.Remove(0, fileentry.LastIndexOf("=", StringComparison.Ordinal) + 1);
+                if (file.Contains("/"))
                 {
-                    string file = fileentry.Remove(fileentry.LastIndexOf("="));
-                    string shaSum = fileentry.Remove(0, fileentry.LastIndexOf("=") + 1);
-                    if (file.Contains("/"))
-                    {
-                        CheckPathExists(file.Remove(file.LastIndexOf("/")));
-                    }
-                    if (FileNeedsUpdating(file, shaSum))
-                    {
-                        Console.Write("Downloading " + file + " ");
-                        if (!UpdateFile(file, shaSum))
-                        {
-                            Console.WriteLine(" error!");
-                            return false;
-                        }
-                        else
-                        {
-                            Console.WriteLine(" done!");
-                        }
-
-                    }
+                    CheckPathExists(file.Remove(file.LastIndexOf("/", StringComparison.Ordinal)));
                 }
+                if (!FileNeedsUpdating(file, shaSum)) continue;
+                Console.Write("Downloading " + file + " ");
+                if (!UpdateFile(file, shaSum))
+                {
+                    Console.WriteLine(" error!");
+                    return false;
+                }
+                Console.WriteLine(" done!");
             }
             return true;
         }
@@ -215,11 +195,9 @@ namespace DMPUpdater
         private static void CheckPathExists(string directory)
         {
             //Recursively create any parent directories.
-            if (!Directory.Exists(Path.Combine(_applicationDirectory, directory)))
-            {
-                CheckPathExists(Directory.GetParent(directory).ToString());
-                Directory.CreateDirectory(Path.Combine(_applicationDirectory, directory));
-            }
+            if (Directory.Exists(Path.Combine(_applicationDirectory, directory))) return;
+            CheckPathExists(Directory.GetParent(directory).ToString());
+            Directory.CreateDirectory(Path.Combine(_applicationDirectory, directory));
         }
 
         private static bool FileNeedsUpdating(string file, string shaSum)
@@ -228,11 +206,11 @@ namespace DMPUpdater
             {
                 return true;
             }
-            using (FileStream fs = new FileStream(Path.Combine(_applicationDirectory, file), FileMode.Open, FileAccess.Read))
+            using (var fs = new FileStream(Path.Combine(_applicationDirectory, file), FileMode.Open, FileAccess.Read))
             {
-                using (SHA256Managed sha = new SHA256Managed())
+                using (var sha = new SHA256Managed())
                 {
-                    string fileSha = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
+                    var fileSha = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
                     if (shaSum != fileSha)
                     {
                         return true;
@@ -249,13 +227,13 @@ namespace DMPUpdater
             {
                 File.Delete(Path.Combine(_applicationDirectory, file));
             }
-            using (FileStream fs = new FileStream(Path.Combine(_applicationDirectory, file), FileMode.Create, FileAccess.Write))
+            using (var fs = new FileStream(Path.Combine(_applicationDirectory, file), FileMode.Create, FileAccess.Write))
             {
-                using (WebClient wc = new WebClient())
+                using (var wc = new WebClient())
                 {
                     try
                     {
-                        byte[] fileBytes = wc.DownloadData(new Uri(UpdateAddress + "versions/" + _mode + "/objects/" + shaSum));
+                        var fileBytes = wc.DownloadData(new Uri(UpdateAddress + "versions/" + _mode + "/objects/" + shaSum));
                         fs.Write(fileBytes, 0, fileBytes.Length);
                     }
                     catch (Exception e)
